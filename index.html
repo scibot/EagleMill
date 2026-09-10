@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Eagle Mill — Site Planner</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root{
+    color-scheme: light;
+    --panel-bg: rgba(255,255,255,0.96);
+    --ink: #1b2430;
+    --muted: #5b6672;
+    --accent: #c0392b;
+    --accent2: #2e7d32;
+    --line: #d9dee3;
+  }
+  html,body{ height:100%; margin:0; padding:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:var(--ink); background:#0c1116; }
+  #map{ position:absolute; inset:0; }
+
+  .panel{
+    position:absolute; top:12px; right:12px; z-index:900;
+    width: 328px; max-width: calc(100vw - 24px);
+    background: var(--panel-bg);
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+    overflow: hidden;
+    max-height: calc(100vh - 24px);
+    display:flex; flex-direction:column;
+  }
+  .panel-header{
+    padding: 12px 14px 10px 14px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .panel-header h1{ font-size:15px; margin:0; line-height:1.25; }
+  .panel-header .sub{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .panel-body{ padding: 10px 14px 14px 14px; overflow-y:auto; }
+  .panel.collapsed .panel-body{ display:none; }
+  .collapse-btn{
+    border:none; background:#eef1f4; color:var(--ink); width:26px; height:26px; border-radius:7px;
+    cursor:pointer; font-size:14px; line-height:1; flex:0 0 auto;
+  }
+  .collapse-btn:hover{ background:#e2e6ea; }
+
+  .section{ margin-top:12px; }
+  .section:first-child{ margin-top:0; }
+  .section h2{
+    font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+    margin:0 0 6px 0; font-weight:600;
+  }
+
+  .section.collapsible > h2{
+    cursor:pointer; user-select:none;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:0; padding-bottom:6px;
+  }
+  .section.collapsible > h2::after{
+    content:'▾'; font-size:9px; color:var(--muted); transition: transform .15s ease; flex:0 0 auto; margin-left:8px;
+  }
+  .section.collapsible.collapsed > h2{ margin-bottom:0; padding-bottom:0; }
+  .section.collapsible.collapsed > h2::after{ transform: rotate(-90deg); }
+  .section.collapsible.collapsed > *:not(h2){ display:none; }
+
+  .row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .row label{ font-size:12px; color:var(--muted); width:56px; flex:0 0 auto; }
+  .row input[type=number]{
+    flex:1 1 auto; min-width:0; font-size:13px; padding:5px 7px; border:1px solid var(--line);
+    border-radius:6px; background:#fff; color:var(--ink);
+  }
+  .row input[type=range]{ flex:1 1 auto; }
+  .rotdeg{ width:46px; text-align:right; font-variant-numeric:tabular-nums; font-size:12px; color:var(--ink); }
+
+  .btnrow{ display:flex; gap:6px; flex-wrap:wrap; }
+  button.chip{
+    border:1px solid var(--line); background:#fff; color:var(--ink);
+    border-radius:7px; padding:6px 9px; font-size:12px; cursor:pointer;
+  }
+  button.chip:hover{ background:#f3f5f7; }
+  button.chip.primary{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  button.chip.primary:hover{ opacity:.9; }
+
+  .nudge-grid{
+    display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; max-width:180px;
+  }
+  .nudge-grid button{ padding:8px 0; }
+
+  .stepper{ display:flex; gap:6px; align-items:center; }
+  .stepper select{ font-size:12px; padding:4px 6px; border-radius:6px; border:1px solid var(--line); }
+
+  .legend-item{ display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:5px; color:var(--ink); }
+  .swatch{ width:14px; height:14px; border-radius:3px; flex:0 0 auto; border:1.5px solid rgba(0,0,0,0.35); }
+
+  .scope-table{ width:100%; border-collapse:collapse; font-size:12px; }
+  .scope-table td{ padding:3px 0; border-bottom:1px dashed var(--line); }
+  .scope-table td:last-child{ text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); }
+  .scope-table tr:last-child td{ border-bottom:none; font-weight:600; color:var(--ink); }
+
+  .note{ font-size:11.5px; color:var(--muted); line-height:1.45; margin-top:8px; }
+  .note b{ color:var(--ink); }
+
+  .coordread{
+    font-size:12px; font-variant-numeric:tabular-nums; color:var(--ink);
+    background:#f6f7f8; border-radius:6px; padding:6px 8px; margin-bottom:8px;
+  }
+
+  .leaflet-tooltip.house-label{
+    background: rgba(20,24,28,0.78); color:#fff; border:none; box-shadow:none;
+    font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px;
+  }
+  .leaflet-tooltip.house-label::before{ display:none; }
+  body.labels-hidden .leaflet-tooltip.house-label{ display:none; }
+
+  .rotate-handle-icon{
+    width:18px; height:18px; border-radius:50%;
+    background: #fff; border:3px solid var(--accent);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+  .move-handle-icon{
+    width:16px; height:16px; border-radius:50%;
+    background: var(--accent); border:2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+
+  .fence-vertex-icon{
+    width:12px; height:12px; border-radius:50%;
+    background:#f1c40f; border:2px solid #6b5300;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .tree-vertex-icon{
+    width:10px; height:10px; border-radius:50%;
+    background:#fff; border:2px solid #2d6a4f;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .drive-vertex-icon{
+    width:10px; height:10px; border-radius:50%;
+    background:#fff; border:2px solid #3a3d42;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+
+  .compass-label-icon{
+    display:none; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%;
+    background: rgba(20,24,28,0.82); color:#fff;
+    font-size:12px; font-weight:700; letter-spacing:.02em;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+  }
+  body.compass-shown .compass-label-icon{ display:flex; }
+
+  .compass{
+    position:absolute; left:12px; top:12px; z-index:900;
+    width:54px; height:54px; border-radius:50%;
+    background: rgba(255,255,255,0.92); box-shadow:0 3px 12px rgba(0,0,0,0.3);
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+  }
+  .compass svg{ width:38px; height:38px; }
+
+  .toggle-panel-btn{
+    position:absolute; top:12px; right:12px; z-index:899;
+    display:none;
+  }
+
+  .banner{
+    position:absolute; left:50%; top:12px; transform:translateX(-50%);
+    z-index:950; max-width:min(560px, calc(100vw - 24px));
+    background:#1b2430; color:#fff; font-size:12.5px; line-height:1.5;
+    padding:10px 14px; border-radius:9px; box-shadow:0 6px 18px rgba(0,0,0,0.35);
+    text-align:center;
+  }
+  .banner.hidden{ display:none; }
+  .banner.error{ background:#7a2e20; }
+  .banner b{ color:#ffd9a8; }
+
+  @media (max-width: 640px){
+    .panel{ width: calc(100vw - 24px); top:64px; }
+    .compass{ top:12px; left:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="compass" title="North is up">
+  <svg viewBox="0 0 100 100">
+    <circle cx="50" cy="50" r="46" fill="none" stroke="#c9cfd4" stroke-width="3"/>
+    <polygon points="50,10 42,55 50,45 58,55" fill="#c0392b"/>
+    <polygon points="50,90 42,55 50,65 58,55" fill="#8a94a0"/>
+    <text x="50" y="24" font-size="16" font-weight="700" text-anchor="middle" fill="#1b2430">N</text>
+  </svg>
+</div>
+
+<div class="panel" id="panel">
+  <div class="panel-header">
+    <div>
+      <h1>Eagle Mill — Site Planner</h1>
+      <div class="sub">Drag either colored dot to move · drag its ring handle to rotate</div>
+    </div>
+    <button class="collapse-btn" id="collapseBtn" title="Collapse">−</button>
+  </div>
+  <div class="panel-body">
+
+    <div class="section">
+      <h2>Editing</h2>
+      <div class="btnrow" id="objSwitch">
+        <button class="chip primary" data-obj="house">🏠 Main house</button>
+        <button class="chip" data-obj="barn">🚜 Pole barn</button>
+        <button class="chip" data-obj="perc">🕳️ Perc area</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Pole barn size</h2>
+      <div class="row">
+        <label style="width:auto;">Length</label>
+        <input type="number" id="barnLengthInput" min="1" step="1" value="50" style="max-width:70px; flex:0 0 auto;">
+        <label style="width:auto; margin-left:8px;">Width</label>
+        <input type="number" id="barnWidthInput" min="1" step="1" value="30" style="max-width:70px; flex:0 0 auto;">
+        <span style="font-size:12px; color:var(--muted);">ft</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="coordread" id="coordRead">lat, lng · rotation</div>
+      <div class="btnrow">
+        <button class="chip" id="resetBtn">Reset to default placement</button>
+        <button class="chip" id="copyBtn">Copy placement</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px;">
+        <button class="chip" id="placementSaveBtn">💾 Save to file</button>
+        <button class="chip" id="placementLoadBtn">📂 Load from file</button>
+        <input type="file" id="placementLoadInput" accept="application/json" style="display:none;">
+      </div>
+      <div class="note" style="margin-top:6px;">
+        Save/Load act on whichever building is selected above — the house and pole barn each get their own placement file,
+        so you can save, share, or restore one without touching the other. Both also auto-save in this browser.
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Rotation</h2>
+      <div class="row">
+        <input type="range" id="rotSlider" min="0" max="359.9" step="0.1" value="0">
+        <span class="rotdeg" id="rotVal">0.0°</span>
+      </div>
+      <div class="btnrow">
+        <button class="chip" data-rot="-45">−45°</button>
+        <button class="chip" data-rot="-5">−5°</button>
+        <button class="chip" data-rot="-1">−1°</button>
+        <button class="chip" data-rot="1">+1°</button>
+        <button class="chip" data-rot="5">+5°</button>
+        <button class="chip" data-rot="45">+45°</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Nudge position</h2>
+      <div class="row" style="margin-bottom:8px;">
+        <label style="width:auto;">Step</label>
+        <div class="stepper">
+          <select id="stepSize">
+            <option value="0.25">3 in</option>
+            <option value="1" selected>1 ft</option>
+            <option value="5">5 ft</option>
+            <option value="20">20 ft</option>
+          </select>
+        </div>
+      </div>
+      <div class="nudge-grid">
+        <span></span>
+        <button class="chip" data-dir="N">▲ N</button>
+        <span></span>
+        <button class="chip" data-dir="W">◀ W</button>
+        <button class="chip" data-dir="C" title="center marker" style="opacity:.5;">•</button>
+        <button class="chip" data-dir="E">▶ E</button>
+        <span></span>
+        <button class="chip" data-dir="S">▼ S</button>
+        <span></span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Exact placement</h2>
+      <div class="row"><label>Lat</label><input type="number" id="latInput" step="0.000001"></div>
+      <div class="row"><label>Lng</label><input type="number" id="lngInput" step="0.000001"></div>
+      <div class="row"><label>Rotation</label><input type="number" id="rotInput" step="0.1"></div>
+    </div>
+
+    <div class="section">
+      <h2>Basemap</h2>
+      <div class="btnrow">
+        <button class="chip primary" id="satBtn">Satellite</button>
+        <button class="chip" id="streetBtn">Street map</button>
+        <button class="chip" id="labelsBtn">Hide labels</button>
+        <button class="chip" id="compassBtn">Show compass</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Percolation test area</h2>
+      <div class="btnrow">
+        <button class="chip primary" id="percToggleBtn">Hide perc area</button>
+      </div>
+      <div class="note" style="margin-top:6px;">
+        Traced from your perc plan (Bruce E. Doak Consulting, 8/7/2025) — the proposed 10,000 sf SRA and test holes A, B, C.
+        Positioned relative to the proposed dwelling shown on that plan, so treat it as approximate; select "🕳️ Perc area"
+        above to move/rotate it, or save/load its placement, the same way as the house and barn.
+      </div>
+    </div>
+
+    <div class="section collapsible" id="secFence">
+      <h2>Fence line</h2>
+      <div class="btnrow">
+        <button class="chip" id="fenceDrawBtn">✏️ Start marking</button>
+        <button class="chip" id="fenceUndoBtn">Undo point</button>
+        <button class="chip" id="fenceClearBtn">Clear</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px;">
+        <button class="chip" id="fenceSaveBtn">💾 Save to file</button>
+        <button class="chip" id="fenceLoadBtn">📂 Load from file</button>
+        <input type="file" id="fenceLoadInput" accept="application/json" style="display:none;">
+      </div>
+      <div class="coordread" id="fenceLen" style="margin-top:8px;">0 points · 0 ft total</div>
+      <div class="note" style="margin-top:6px;">
+        Click "Start marking", then click points along the map to trace the fence — click "Start marking" again (or press Esc) to stop.
+        Drag any yellow dot to fix its position; double-click a dot to delete it.
+        Your fence line auto-saves in this browser, so it's still here next time you reopen this file — "Save to file" also
+        writes it out as a small .json you can back up or load on another computer with "Load from file."
+      </div>
+    </div>
+
+    <div class="section collapsible" id="secTree">
+      <h2>Tree line — privacy screen</h2>
+      <div class="row">
+        <label style="width:auto;">Canopy dia.</label>
+        <input type="number" id="treeDiaInput" min="1" step="0.5" value="10" style="max-width:70px; flex:0 0 auto;">
+        <span style="font-size:12px; color:var(--muted);">ft (Green Giant)</span>
+      </div>
+      <div class="btnrow" style="margin-top:6px;">
+        <button class="chip" id="treeDrawBtn">🌲 Start marking</button>
+        <button class="chip" id="treeUndoBtn">Undo point</button>
+        <button class="chip" id="treeClearBtn">Clear</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px;">
+        <button class="chip" id="treeSaveBtn">💾 Save to file</button>
+        <button class="chip" id="treeLoadBtn">📂 Load from file</button>
+        <input type="file" id="treeLoadInput" accept="application/json" style="display:none;">
+      </div>
+      <div class="coordread" id="treeCount" style="margin-top:8px; font-size:14px; font-weight:700;">🌲 0 Green Giants needed</div>
+      <div class="coordread" id="treeLen" style="margin-top:6px;">0.0 ft of tree line · add points to trace the line</div>
+      <div class="note" style="margin-top:6px;">
+        Click "Start marking", then click points to trace where you want the tree line (e.g. just inside the fence, for privacy).
+        Trees are placed automatically along that line, spaced to the canopy diameter above so mature canopies just touch with
+        no gaps — change the diameter any time and they re-space instantly, updating the count above. Drag or double-click the small dots the same way
+        as the fence line to adjust the path.
+      </div>
+    </div>
+
+    <div class="section collapsible" id="secDrive">
+      <h2>Driveway</h2>
+      <div class="row">
+        <label style="width:auto;">Width</label>
+        <input type="number" id="driveWidthInput" min="1" step="0.5" value="12" style="max-width:70px; flex:0 0 auto;">
+        <span style="font-size:12px; color:var(--muted);">ft</span>
+      </div>
+      <div class="btnrow" style="margin-top:6px;">
+        <button class="chip" id="driveDrawBtn">🛣️ Start marking</button>
+        <button class="chip" id="driveUndoBtn">Undo point</button>
+        <button class="chip" id="driveClearBtn">Clear</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px;">
+        <button class="chip" id="driveSaveBtn">💾 Save to file</button>
+        <button class="chip" id="driveLoadBtn">📂 Load from file</button>
+        <input type="file" id="driveLoadInput" accept="application/json" style="display:none;">
+      </div>
+      <div class="coordread" id="driveLen" style="margin-top:8px;">0.0 ft driveway · 12 ft wide</div>
+      <div class="note" style="margin-top:6px;">
+        Click "Start marking", then click points from the road to the house to trace the driveway's centerline — it's drawn as
+        a solid ribbon at the width above, and re-widens instantly if you change it. Drag or double-click the small dots to
+        adjust the path, same as the fence and tree line. Curves are approximate — good for planning, not a paving layout.
+      </div>
+    </div>
+
+    <div class="section collapsible" id="secLegend">
+      <h2>Legend</h2>
+      <div class="legend-item"><span class="swatch" style="background:#e07856;"></span> Traced house footprint (main house, garage, porch, patio)</div>
+      <div class="legend-item"><span class="swatch" style="background:#5b9bd5;"></span> Pole barn / garage — size adjustable above (default 50' × 30'), moves &amp; rotates independently</div>
+      <div class="legend-item"><span class="swatch" style="background:#a9744f;"></span> Percolation test area (SRA) &amp; test holes A/B/C — toggle, move &amp; rotate independently</div>
+      <div class="legend-item"><span class="swatch" style="background:#f1c40f;"></span> Fence line — click-to-place, drag to adjust</div>
+      <div class="legend-item"><span class="swatch" style="background:#40916c;"></span> Tree line — Green Giant privacy screen, canopy diameter adjustable</div>
+      <div class="legend-item"><span class="swatch" style="background:#6b6f76;"></span> Driveway — click-to-place centerline, width adjustable (default 12 ft)</div>
+    </div>
+
+    <div class="section">
+      <h2>Job scope — "Eagle Mill"</h2>
+      <table class="scope-table">
+        <tr><td>Main floor finished</td><td>3,515 sf</td></tr>
+        <tr><td>Upper floor finished</td><td>1,648 sf</td></tr>
+        <tr><td>Lower floor finished</td><td>1,613 sf</td></tr>
+        <tr><td>Lower floor unfinished</td><td>360 sf</td></tr>
+        <tr><td>Garage(s)</td><td>1,321 sf</td></tr>
+        <tr><td>Deck(s) &amp; patio(s)</td><td>1,435 sf</td></tr>
+        <tr><td>Total finished living area</td><td>6,776 sf</td></tr>
+      </table>
+    </div>
+
+    <div class="note">
+      The house footprint is traced directly from the exterior wall line you marked in red on the Main Floor
+      Plan (not a re-estimate) — 39 vertices, <b>~4,726 sf</b> of building footprint, <b>~419 ft</b> of perimeter,
+      including the porch posts, covered patio step, rec-room bay and the angled 3-car garage.
+      The pole barn is a simple rectangle (default <b>50' × 30'</b>, resizable in "Pole barn size" above) you can drag
+      and rotate independently of the house — use the "Editing" switch above to choose which one the controls below act on.
+      Verify exact setbacks against your recorded plat before finalizing placement.
+    </div>
+  </div>
+</div>
+
+<div class="banner" id="banner">Loading satellite imagery…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+
+  // ---------- Site location (from the coordinates you provided) ----------
+  var SITE = { lat: 39.66368140482779, lng: -76.68286619852712 };
+
+  // ---------- House footprint, in feet, local plan coordinates ----------
+  // +x = east-as-drawn, +y = north-as-drawn, before any rotation is applied.
+  // Traced pixel-for-pixel from the red exterior outline on your marked-up Main Floor Plan
+  // (auto-vectorized from the PDF, then snapped to remove sub-quarter-foot tracing noise).
+  var FT = 0.3048;
+
+  var FOOTPRINT = [
+    [94.45,-14.5],[94.45,-1.77],[73.92,-1.77],[73.92,-14.72],[55.84,-14.72],
+    [55.84,-26.74],[37.52,-26.74],[37.52,-23.83],[24.1,-23.83],[24.1,-27.21],
+    [8.12,-27.21],[8.12,-56.8],[14.06,-56.8],[14.06,-63.8],[19.03,-63.8],
+    [19.03,-65.77],[26.07,-65.77],[26.07,-63.56],[31.01,-63.56],[31.01,-55.21],
+    [53.14,-55.21],[53.14,-61.13],[66.82,-61.13],[66.82,-59.21],[75.64,-59.21],
+    [86.7,-70.21],[84.04,-73.16],[94.56,-83.83],[98.93,-79.69],[108.11,-88.84],
+    [112.28,-84.65],[114.56,-86.62],[122.72,-78.53],[120.69,-76.22],[124.85,-71.99],
+    [94.65,-41.61],[94.65,-35.68],[100.12,-35.68],[100.12,-14.5]
+  ];
+
+  var LABELS = [
+    { text: 'Main house', pt: [60,-40] },
+    { text: '3-car garage', pt: [106.7,-79.4] }
+  ];
+
+  // Pivot / drag-handle origin = the true polygon centroid (shoelace formula),
+  // expressed in local feet coordinates.
+  function polygonCentroid(pts){
+    var A=0, cx=0, cy=0;
+    for (var i=0;i<pts.length;i++){
+      var p1=pts[i], p2=pts[(i+1)%pts.length];
+      var cross = p1[0]*p2[1]-p2[0]*p1[1];
+      A += cross;
+      cx += (p1[0]+p2[0])*cross;
+      cy += (p1[1]+p2[1])*cross;
+    }
+    A/=2;
+    return [cx/(6*A), cy/(6*A)];
+  }
+  // ---------- Second independent object: pole barn / garage ----------
+  // A simple rectangle (default 50' x 30'), centered on its own local origin
+  // — length/width are adjustable from the panel, restored from this browser
+  // if you've changed them before.
+  var BARN_STORAGE_KEY = 'eagleMillSitePlanner_barnSize_v1';
+  function makeBarnFootprint(lengthFt, widthFt){
+    var hx = lengthFt/2, hy = widthFt/2;
+    return [ [-hx,-hy], [hx,-hy], [hx,hy], [-hx,hy] ];
+  }
+  function loadBarnSizeFromStorage(){
+    try{
+      var raw = localStorage.getItem(BARN_STORAGE_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (isFinite(data.length) && data.length > 0 && isFinite(data.width) && data.width > 0) return data;
+    } catch(e){ /* ignore missing/corrupt data */ }
+    return null;
+  }
+  function saveBarnSizeToStorage(lengthFt, widthFt){
+    try{ localStorage.setItem(BARN_STORAGE_KEY, JSON.stringify({ length: lengthFt, width: widthFt })); }
+    catch(e){ /* storage unavailable */ }
+  }
+  var savedBarnSize = loadBarnSizeFromStorage();
+  var barnLengthFt = (savedBarnSize && savedBarnSize.length) || 50;
+  var barnWidthFt  = (savedBarnSize && savedBarnSize.width)  || 30;
+  var BARN_FOOTPRINT = makeBarnFootprint(barnLengthFt, barnWidthFt);
+  var BARN_LABELS = [ { text: 'Pole barn (' + barnLengthFt + '′×' + barnWidthFt + '′)', pt: [0,0] } ];
+
+  // ---------- Third independent object: percolation test area (SRA) ----------
+  // Traced from the uploaded "Seitz Eagle perc plan" (Bruce E. Doak Consulting,
+  // 8/7/2025): the red-outlined proposed 10,000 sf SRA and test holes A/B/C,
+  // vectorized from the plan at its stated 1"=60' scale and positioned relative
+  // to that plan's "PROPOSED DWELLING" box, which is taken to be the same
+  // proposed house already placed on this map (i.e. the site coordinate) —
+  // so treat this placement as approximate, not surveyed.
+  var PERC_FOOTPRINT = [
+    [-30.82,84.72], [-58.42,-1.38], [-18.22,-39.78],
+    [4.58,-80.88], [66.38,-30.78], [16.88,49.02]
+  ];
+  var PERC_LABELS = [
+    { text: 'Perc test area (≈10,000 sf SRA)', pt: [-45,55] },
+    { text: 'Test A', pt: [5.48,-58.98] },
+    { text: 'Test B', pt: [0.68,-1.38] },
+    { text: 'Test C', pt: [-24.52,60.42] }
+  ];
+  var PERC_PIVOT_LAT = 39.66412505199472, PERC_PIVOT_LNG = -76.68271123291943;
+
+  // ---------- Geo helpers (flat-earth approximation, accurate at this scale) ----------
+  function metersPerDegLat(){ return 111320; }
+  function metersPerDegLng(lat){ return 111320 * Math.cos(lat*Math.PI/180); }
+
+  function bearingBetween(lat1,lng1,lat2,lng2){
+    var dLat = lat2-lat1, dLng = lng2-lng1;
+    var northM = dLat*metersPerDegLat();
+    var eastM = dLng*metersPerDegLng(lat1);
+    var brg = Math.atan2(eastM, northM) * 180/Math.PI;
+    if (brg<0) brg += 360;
+    return brg;
+  }
+  function destPoint(lat,lng,bearingDeg,distM){
+    var rad = bearingDeg*Math.PI/180;
+    var northM = distM*Math.cos(rad), eastM = distM*Math.sin(rad);
+    return [ lat + northM/metersPerDegLat(), lng + eastM/metersPerDegLng(lat) ];
+  }
+
+  // ---------- Map ----------
+  var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([SITE.lat, SITE.lng], 20);
+  L.control.zoom({ position:'topleft' }).addTo(map);
+  L.control.scale({ metric:false, imperial:true, position:'bottomleft' }).addTo(map);
+
+  var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxNativeZoom: 19, maxZoom: 22,
+    attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+  }).addTo(map);
+
+  // ---------- Tile-load watchdog banner ----------
+  // If tiles never load (e.g. this file is being viewed inside a sandboxed chat
+  // preview instead of a real browser tab), tell the user what to do about it.
+  var banner = document.getElementById('banner');
+  var tilesLoadedOK = false;
+  var errorCount = 0;
+  sat.on('tileload', function(){ tilesLoadedOK = true; banner.classList.add('hidden'); });
+  sat.on('tileerror', function(){
+    errorCount++;
+    if (errorCount >= 4 && !tilesLoadedOK){
+      banner.classList.add('error');
+      banner.innerHTML = 'Map imagery isn\'t loading. If you\'re viewing this inside a chat preview, ' +
+        '<b>download this file and open it directly in Chrome/Safari/Edge</b> — it needs your browser\'s ' +
+        'own internet connection to fetch satellite tiles. Otherwise, check your connection and reload.';
+    }
+  });
+  setTimeout(function(){
+    if (!tilesLoadedOK){
+      banner.classList.add('error');
+      banner.innerHTML = 'Still waiting on map imagery. If you\'re viewing this inside a chat preview, ' +
+        '<b>download this file and open it directly in Chrome/Safari/Edge</b> instead — the preview pane ' +
+        'often blocks live map tiles. Otherwise, check your internet connection and reload the page.';
+    }
+  }, 6000);
+
+  var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 20,
+    attribution: '&copy; OpenStreetMap contributors'
+  });
+
+  document.getElementById('satBtn').addEventListener('click', function(){
+    map.removeLayer(street); map.addLayer(sat);
+    this.classList.add('primary');
+    document.getElementById('streetBtn').classList.remove('primary');
+  });
+  document.getElementById('streetBtn').addEventListener('click', function(){
+    map.removeLayer(sat); map.addLayer(street);
+    this.classList.add('primary');
+    document.getElementById('satBtn').classList.remove('primary');
+  });
+
+  // "Toggle labels" hides/shows the on-map text callouts (Main house, 3-car
+  // garage, Pole barn) — not a map layer, since those callouts are what people
+  // mean by "labels" here.
+  var labelsShown = true;
+  document.getElementById('labelsBtn').addEventListener('click', function(){
+    labelsShown = !labelsShown;
+    document.body.classList.toggle('labels-hidden', !labelsShown);
+    this.textContent = labelsShown ? 'Hide labels' : 'Show labels';
+  });
+
+  // "Show compass" overlays fixed N/E/S/W badges around the house and barn so
+  // you can tell which side of each faces which real-world direction even
+  // after rotating it — these badges stay put on true north/east/south/west,
+  // they do NOT spin with the object.
+  var compassLabelsShown = false;
+  document.getElementById('compassBtn').addEventListener('click', function(){
+    compassLabelsShown = !compassLabelsShown;
+    document.body.classList.toggle('compass-shown', compassLabelsShown);
+    this.textContent = compassLabelsShown ? 'Hide compass' : 'Show compass';
+  });
+
+  // Farthest distance (ft) from an object's pivot to any of its footprint
+  // vertices — used to place its compass badges just outside its shape.
+  function footprintOuterRadiusFt(footprint, pivot){
+    var maxD = 0;
+    footprint.forEach(function(p){
+      var dx = p[0]-pivot[0], dy = p[1]-pivot[1];
+      var d = Math.sqrt(dx*dx+dy*dy);
+      if (d > maxD) maxD = d;
+    });
+    return maxD;
+  }
+
+  // ---------- Move + rotate handles are ~65 ft (20 m) out from each object's pivot ----------
+  var ROT_HANDLE_RADIUS_M = 20;
+
+  // ---------- Generic placed-object factory: footprint polygon + its own ----------
+  // ---------- independent move handle + rotate handle + redraw logic. ----------
+  function makeObject(cfg){
+    var obj = {
+      name: cfg.name,
+      footprint: cfg.footprint,
+      pivot: cfg.pivot || polygonCentroid(cfg.footprint),
+      state: { lat: cfg.defaultLat, lng: cfg.defaultLng, rot: cfg.defaultRot || 0 },
+      defaultState: { lat: cfg.defaultLat, lng: cfg.defaultLng, rot: cfg.defaultRot || 0 },
+      storageKey: cfg.storageKey
+    };
+
+    // Auto-persist this object's placement to the browser, independently of
+    // any other object — wrapped in try/catch since a few browsers restrict
+    // storage for local file:// pages (the Save/Load-to-file buttons cover
+    // that case regardless).
+    obj.saveToStorage = function(){
+      if (!obj.storageKey) return;
+      try{
+        localStorage.setItem(obj.storageKey, JSON.stringify({ lat: obj.state.lat, lng: obj.state.lng, rot: obj.state.rot }));
+      } catch(e){ /* storage unavailable — Save-to-file still works */ }
+    };
+    obj.loadFromStorage = function(){
+      if (!obj.storageKey) return false;
+      try{
+        var raw = localStorage.getItem(obj.storageKey);
+        if (!raw) return false;
+        var data = JSON.parse(raw);
+        if (isFinite(data.lat) && isFinite(data.lng) && isFinite(data.rot)){
+          obj.state.lat = data.lat; obj.state.lng = data.lng; obj.state.rot = data.rot;
+          return true;
+        }
+      } catch(e){ /* ignore missing/corrupt data */ }
+      return false;
+    };
+
+    obj.localToLatLng = function(pt){
+      var dxFt = pt[0]-obj.pivot[0];
+      var dyFt = pt[1]-obj.pivot[1];
+      var dxM = dxFt*FT, dyM = dyFt*FT;
+      var rad = obj.state.rot*Math.PI/180;
+      var eastM  = dxM*Math.cos(rad) + dyM*Math.sin(rad);
+      var northM = -dxM*Math.sin(rad) + dyM*Math.cos(rad);
+      var dLat = northM/metersPerDegLat();
+      var dLng = eastM/metersPerDegLng(obj.state.lat);
+      return [obj.state.lat+dLat, obj.state.lng+dLng];
+    };
+
+    obj.polygon = L.polygon([[0,0]], {
+      color: cfg.strokeColor, weight: 2.5, opacity: 0.95,
+      fillColor: cfg.fillColor, fillOpacity: 0.5
+    }).addTo(map);
+
+    obj.labelMarkers = (cfg.labels || []).map(function(lbl){
+      var m = L.marker([0,0], { icon: L.divIcon({ className:'', html:'', iconSize:[1,1] }), interactive:false }).addTo(map);
+      m.bindTooltip(lbl.text, { permanent:true, direction:'center', className:'house-label' });
+      return { m:m, pt:lbl.pt };
+    });
+
+    var moveIcon = L.divIcon({ className:'', html:'<div class="move-handle-icon" style="background:'+cfg.handleColor+'"></div>', iconSize:[16,16], iconAnchor:[8,8] });
+    var rotIcon  = L.divIcon({ className:'', html:'<div class="rotate-handle-icon" style="border-color:'+cfg.handleColor+'"></div>', iconSize:[18,18], iconAnchor:[9,9] });
+
+    obj.moveHandle = L.marker([obj.state.lat, obj.state.lng], { icon:moveIcon, draggable:true, title:'Drag to move ' + cfg.name }).addTo(map);
+    obj.rotHandle  = L.marker([obj.state.lat, obj.state.lng], { icon:rotIcon, draggable:true, title:'Drag to rotate ' + cfg.name }).addTo(map);
+
+    // Fixed N/E/S/W badges just outside the footprint — these mark true
+    // geographic direction and stay put as the object rotates (unlike the
+    // rotate handle above, which orbits with obj.state.rot).
+    var compassRadiusM = (footprintOuterRadiusFt(obj.footprint, obj.pivot) + 15) * FT;
+    obj.compassMarkers = [
+      { bearing: 0,   label: 'N' },
+      { bearing: 90,  label: 'E' },
+      { bearing: 180, label: 'S' },
+      { bearing: 270, label: 'W' }
+    ].map(function(d){
+      var icon = L.divIcon({ className:'', html:'<div class="compass-label-icon">'+d.label+'</div>', iconSize:[22,22], iconAnchor:[11,11] });
+      return { marker: L.marker([obj.state.lat, obj.state.lng], { icon:icon, interactive:false }).addTo(map), bearing: d.bearing };
+    });
+
+    obj.redraw = function(){
+      obj.polygon.setLatLngs([obj.footprint.map(obj.localToLatLng)]);
+      obj.labelMarkers.forEach(function(lm){ lm.m.setLatLng(obj.localToLatLng(lm.pt)); });
+      obj.moveHandle.setLatLng([obj.state.lat, obj.state.lng]);
+      obj.rotHandle.setLatLng(destPoint(obj.state.lat, obj.state.lng, obj.state.rot, ROT_HANDLE_RADIUS_M));
+      obj.compassMarkers.forEach(function(cm){
+        cm.marker.setLatLng(destPoint(obj.state.lat, obj.state.lng, cm.bearing, compassRadiusM));
+      });
+      obj.saveToStorage();
+      if (obj === activeObj) updatePanelFromActive();
+    };
+
+    obj.moveHandle.on('drag', function(e){
+      var p = e.target.getLatLng();
+      obj.state.lat = p.lat; obj.state.lng = p.lng;
+      obj.redraw();
+    });
+    obj.rotHandle.on('drag', function(e){
+      var p = e.target.getLatLng();
+      obj.state.rot = bearingBetween(obj.state.lat, obj.state.lng, p.lat, p.lng);
+      obj.redraw();
+    });
+
+    function startDragFromPoly(e){
+      map.dragging.disable();
+      L.DomEvent.stop(e);
+      var lastLatLng = e.latlng || map.mouseEventToLatLng(e.originalEvent.touches ? e.originalEvent.touches[0] : e.originalEvent);
+      function onMove(ev){
+        var latlng = map.mouseEventToLatLng(ev.touches ? ev.touches[0] : ev);
+        obj.state.lat += latlng.lat - lastLatLng.lat;
+        obj.state.lng += latlng.lng - lastLatLng.lng;
+        lastLatLng = latlng;
+        obj.redraw();
+      }
+      function onUp(){
+        map.dragging.enable();
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, {passive:false});
+      document.addEventListener('touchend', onUp);
+    }
+    obj.polygon.on('mousedown', startDragFromPoly);
+    obj.polygon.on('touchstart', startDragFromPoly);
+
+    // Swap in a new footprint (e.g. the barn's adjustable length/width) —
+    // recenters the pivot and the compass-badge radius on the new shape,
+    // then redraws.
+    obj.setFootprint = function(newFootprint){
+      obj.footprint = newFootprint;
+      obj.pivot = cfg.pivot || polygonCentroid(newFootprint);
+      compassRadiusM = (footprintOuterRadiusFt(obj.footprint, obj.pivot) + 15) * FT;
+      obj.redraw();
+    };
+
+    return obj;
+  }
+
+  // House defaults to the surveyed site point; the barn defaults to a spot
+  // 200 ft north of the house so the two don't start on top of each other.
+  var barnStart = destPoint(SITE.lat, SITE.lng, 0, 200*FT);
+
+  var houseObj = makeObject({
+    name: 'Main house', footprint: FOOTPRINT, labels: LABELS,
+    defaultLat: SITE.lat, defaultLng: SITE.lng, defaultRot: 0,
+    fillColor: '#e07856', strokeColor: '#7a2e20', handleColor: '#c0392b',
+    storageKey: 'eagleMillSitePlanner_house_v1'
+  });
+
+  var barnObj = makeObject({
+    name: 'Pole barn', footprint: BARN_FOOTPRINT, labels: BARN_LABELS,
+    defaultLat: barnStart[0], defaultLng: barnStart[1], defaultRot: 0,
+    fillColor: '#5b9bd5', strokeColor: '#1c3a52', handleColor: '#2f6fb0',
+    storageKey: 'eagleMillSitePlanner_barn_v1'
+  });
+
+  var percObj = makeObject({
+    name: 'Perc test area', footprint: PERC_FOOTPRINT, labels: PERC_LABELS,
+    defaultLat: PERC_PIVOT_LAT, defaultLng: PERC_PIVOT_LNG, defaultRot: 0,
+    fillColor: '#a9744f', strokeColor: '#5b3a24', handleColor: '#8a5a35',
+    storageKey: 'eagleMillSitePlanner_perc_v1'
+  });
+
+  // Reflect whatever size was restored (or the 50×30 default) in the inputs,
+  // then keep the barn's shape and label in sync whenever they change.
+  document.getElementById('barnLengthInput').value = barnLengthFt;
+  document.getElementById('barnWidthInput').value = barnWidthFt;
+  function applyBarnSize(){
+    var l = parseFloat(document.getElementById('barnLengthInput').value);
+    var w = parseFloat(document.getElementById('barnWidthInput').value);
+    if (!isFinite(l) || l <= 0 || !isFinite(w) || w <= 0) return;
+    barnLengthFt = l; barnWidthFt = w;
+    barnObj.setFootprint(makeBarnFootprint(l, w));
+    barnObj.labelMarkers[0].m.setTooltipContent('Pole barn (' + l + '′×' + w + '′)');
+    saveBarnSizeToStorage(l, w);
+  }
+  document.getElementById('barnLengthInput').addEventListener('input', applyBarnSize);
+  document.getElementById('barnWidthInput').addEventListener('input', applyBarnSize);
+
+  var activeObj = houseObj;
+
+  // ---------- Panel controls (act on whichever object is currently selected) ----------
+  document.querySelectorAll('#objSwitch button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#objSwitch button').forEach(function(b){ b.classList.remove('primary'); });
+      this.classList.add('primary');
+      var which = this.getAttribute('data-obj');
+      activeObj = (which === 'barn') ? barnObj : (which === 'perc') ? percObj : houseObj;
+      updatePanelFromActive();
+    });
+  });
+
+  function updatePanelFromActive(){
+    var o = activeObj;
+    document.getElementById('coordRead').textContent =
+      o.name + ':  ' + o.state.lat.toFixed(6) + ', ' + o.state.lng.toFixed(6) + '  ·  ' + o.state.rot.toFixed(1) + '°';
+    document.getElementById('rotSlider').value = ((o.state.rot%360)+360)%360;
+    document.getElementById('rotVal').textContent = o.state.rot.toFixed(1) + '°';
+    document.getElementById('latInput').value = o.state.lat.toFixed(6);
+    document.getElementById('lngInput').value = o.state.lng.toFixed(6);
+    document.getElementById('rotInput').value = o.state.rot.toFixed(1);
+  }
+
+  document.getElementById('rotSlider').addEventListener('input', function(){
+    activeObj.state.rot = parseFloat(this.value);
+    activeObj.redraw();
+  });
+  document.querySelectorAll('button.chip[data-rot]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      activeObj.state.rot = (((activeObj.state.rot + parseFloat(this.getAttribute('data-rot')))%360)+360)%360;
+      activeObj.redraw();
+    });
+  });
+
+  function nudge(dir){
+    var stepFt = parseFloat(document.getElementById('stepSize').value);
+    var stepM = stepFt*FT;
+    var brgMap = { N:0, S:180, E:90, W:270 };
+    if (!(dir in brgMap)) return;
+    var np = destPoint(activeObj.state.lat, activeObj.state.lng, brgMap[dir], stepM);
+    activeObj.state.lat = np[0]; activeObj.state.lng = np[1];
+    activeObj.redraw();
+  }
+  document.querySelectorAll('button.chip[data-dir]').forEach(function(btn){
+    btn.addEventListener('click', function(){ nudge(this.getAttribute('data-dir')); });
+  });
+
+  document.getElementById('latInput').addEventListener('change', function(){
+    activeObj.state.lat = parseFloat(this.value); activeObj.redraw();
+  });
+  document.getElementById('lngInput').addEventListener('change', function(){
+    activeObj.state.lng = parseFloat(this.value); activeObj.redraw();
+  });
+  document.getElementById('rotInput').addEventListener('change', function(){
+    activeObj.state.rot = parseFloat(this.value); activeObj.redraw();
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    var o = activeObj;
+    o.state.lat = o.defaultState.lat; o.state.lng = o.defaultState.lng; o.state.rot = o.defaultState.rot;
+    map.setView([o.state.lat, o.state.lng], 20);
+    o.redraw();
+  });
+
+  document.getElementById('copyBtn').addEventListener('click', function(){
+    var o = activeObj;
+    var text = o.name + ' — Center: ' + o.state.lat.toFixed(6) + ', ' + o.state.lng.toFixed(6) + '  Rotation: ' + o.state.rot.toFixed(1) + ' deg';
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){
+        var b = document.getElementById('copyBtn'); var old = b.textContent;
+        b.textContent = 'Copied!'; setTimeout(function(){ b.textContent = old; }, 1200);
+      }).catch(function(){ window.prompt('Copy this:', text); });
+    } else {
+      window.prompt('Copy this:', text);
+    }
+  });
+
+  // Save/Load-to-file act on whichever object is currently selected (house or
+  // barn) — each gets its own placement file, independent of the other.
+  document.getElementById('placementSaveBtn').addEventListener('click', function(){
+    var o = activeObj;
+    var data = {
+      type: 'eagle-mill-object-placement',
+      object: o.name,
+      savedAt: new Date().toISOString(),
+      lat: o.state.lat, lng: o.state.lng, rot: o.state.rot
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var fname = 'eagle-mill-' + o.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-placement.json';
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  });
+  document.getElementById('placementLoadBtn').addEventListener('click', function(){
+    document.getElementById('placementLoadInput').click();
+  });
+  document.getElementById('placementLoadInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var data = JSON.parse(reader.result);
+        if (!isFinite(data.lat) || !isFinite(data.lng) || !isFinite(data.rot)) throw new Error('bad data');
+        var o = activeObj;
+        if (data.object && data.object !== o.name){
+          var proceed = window.confirm('This file was saved for "' + data.object + '", but "' + o.name + '" is currently selected. Load it onto "' + o.name + '" anyway?');
+          if (!proceed){ e.target.value = ''; return; }
+        }
+        o.state.lat = data.lat; o.state.lng = data.lng; o.state.rot = data.rot;
+        o.redraw();
+      } catch(err){
+        alert('Could not read that file — make sure it\'s a placement file saved from this tool\'s "Save to file" button.');
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('collapseBtn').addEventListener('click', function(){
+    var panel = document.getElementById('panel');
+    panel.classList.toggle('collapsed');
+    this.textContent = panel.classList.contains('collapsed') ? '+' : '−';
+  });
+
+  // Fence line / Tree line / Driveway / Legend fold individually (click their
+  // header) to cut down on scrolling — collapsed by default, remembered per
+  // section in this browser.
+  var SECTION_COLLAPSE_KEY = 'eagleMillSitePlanner_sectionCollapse_v1';
+  var DEFAULT_COLLAPSED_SECTIONS = ['secFence', 'secTree', 'secDrive', 'secLegend'];
+  function loadSectionCollapseState(){
+    try{ return JSON.parse(localStorage.getItem(SECTION_COLLAPSE_KEY)) || {}; }
+    catch(e){ return {}; }
+  }
+  function saveSectionCollapseState(state){
+    try{ localStorage.setItem(SECTION_COLLAPSE_KEY, JSON.stringify(state)); } catch(e){ /* storage unavailable */ }
+  }
+  var sectionCollapseState = loadSectionCollapseState();
+  document.querySelectorAll('.section.collapsible').forEach(function(sec){
+    var id = sec.id;
+    var collapsed = (id in sectionCollapseState) ? sectionCollapseState[id] : (DEFAULT_COLLAPSED_SECTIONS.indexOf(id) !== -1);
+    sec.classList.toggle('collapsed', collapsed);
+    sec.querySelector('h2').addEventListener('click', function(){
+      var isCollapsed = sec.classList.toggle('collapsed');
+      sectionCollapseState[id] = isCollapsed;
+      saveSectionCollapseState(sectionCollapseState);
+    });
+  });
+
+  // keyboard nudges (arrow keys move, [ and ] rotate) act on the selected object,
+  // ignored while typing in an input
+  document.addEventListener('keydown', function(e){
+    if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='SELECT')) return;
+    if (e.key==='ArrowUp'){ nudge('N'); e.preventDefault(); }
+    else if (e.key==='ArrowDown'){ nudge('S'); e.preventDefault(); }
+    else if (e.key==='ArrowLeft'){ nudge('W'); e.preventDefault(); }
+    else if (e.key==='ArrowRight'){ nudge('E'); e.preventDefault(); }
+    else if (e.key==='['){ activeObj.state.rot = (((activeObj.state.rot-1)%360)+360)%360; activeObj.redraw(); }
+    else if (e.key===']'){ activeObj.state.rot = (((activeObj.state.rot+1)%360)+360)%360; activeObj.redraw(); }
+  });
+
+  // Restore each object's previously-saved placement from this browser, if any.
+  houseObj.loadFromStorage();
+  barnObj.loadFromStorage();
+  percObj.loadFromStorage();
+  houseObj.redraw();
+  barnObj.redraw();
+  percObj.redraw();
+
+  // "Hide perc area" toggles the perc object's polygon, labels and handles
+  // off the map entirely (rather than just dimming it), since a perc/septic
+  // reserve area is something you'd often want out of the way visually.
+  var percVisible = true;
+  function percLayers(){
+    return [percObj.polygon, percObj.moveHandle, percObj.rotHandle]
+      .concat(percObj.labelMarkers.map(function(lm){ return lm.m; }))
+      .concat(percObj.compassMarkers.map(function(cm){ return cm.marker; }));
+  }
+  function setPercVisible(v){
+    percVisible = v;
+    percLayers().forEach(function(l){
+      if (v){ if (!map.hasLayer(l)) map.addLayer(l); }
+      else { if (map.hasLayer(l)) map.removeLayer(l); }
+    });
+  }
+  document.getElementById('percToggleBtn').addEventListener('click', function(){
+    setPercVisible(!percVisible);
+    this.classList.toggle('primary', percVisible);
+    this.textContent = percVisible ? 'Hide perc area' : 'Show perc area';
+  });
+
+  // ---------- Fence-line marking tool ----------
+  // A free-form click-to-place polyline: click "Start marking", click points
+  // on the map to trace the fence, drag any point to fix it, double-click a
+  // point to remove it. Independent of the house/barn objects above.
+  var fencePoints = [];
+  var fenceMarkers = [];
+  var fenceDrawing = false;
+  var fenceLine = L.polyline([], { color:'#f1c40f', weight:3, opacity:0.95, dashArray:'7 6' }).addTo(map);
+  var fenceVertexIcon = L.divIcon({ className:'', html:'<div class="fence-vertex-icon"></div>', iconSize:[12,12], iconAnchor:[6,6] });
+  var FENCE_STORAGE_KEY = 'eagleMillSitePlanner_fenceLine_v1';
+
+  function fenceLengthFt(){
+    var total = 0;
+    for (var i=1;i<fencePoints.length;i++){ total += fencePoints[i-1].distanceTo(fencePoints[i]); }
+    return total / FT; // meters -> feet
+  }
+
+  // Auto-persist to this browser so the fence survives closing/reopening this
+  // same file. Wrapped in try/catch since a few browsers restrict storage for
+  // local file:// pages — the explicit Save/Load-to-file buttons below cover
+  // that case regardless.
+  function saveFenceToStorage(){
+    try{
+      localStorage.setItem(FENCE_STORAGE_KEY, JSON.stringify(fencePoints.map(function(p){ return [p.lat, p.lng]; })));
+    } catch(e){ /* storage unavailable — Save-to-file still works */ }
+  }
+  function loadFenceFromStorage(){
+    try{
+      var raw = localStorage.getItem(FENCE_STORAGE_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length){
+        fencePoints = data.map(function(p){ return L.latLng(p[0], p[1]); });
+        return true;
+      }
+    } catch(e){ /* ignore missing/corrupt data */ }
+    return false;
+  }
+
+  function updateFenceReadout(){
+    var n = fencePoints.length;
+    document.getElementById('fenceLen').textContent =
+      n + (n===1 ? ' point' : ' points') + ' · ' + fenceLengthFt().toFixed(1) + ' ft total';
+  }
+
+  function redrawFence(){
+    fenceLine.setLatLngs(fencePoints);
+    fenceMarkers.forEach(function(m){ map.removeLayer(m); });
+    fenceMarkers = fencePoints.map(function(pt, idx){
+      var mk = L.marker(pt, { icon: fenceVertexIcon, draggable:true, title:'Drag to adjust · double-click to delete' }).addTo(map);
+      mk.on('drag', function(e){
+        fencePoints[idx] = e.target.getLatLng();
+        fenceLine.setLatLngs(fencePoints);
+        updateFenceReadout();
+      });
+      mk.on('dragend', saveFenceToStorage);
+      mk.on('dblclick', function(e){
+        L.DomEvent.stop(e);
+        fencePoints.splice(idx, 1);
+        redrawFence();
+        updateFenceReadout();
+        saveFenceToStorage();
+      });
+      return mk;
+    });
+  }
+
+  // Only one of fence / tree-line / driveway marking can be active at once —
+  // starting one stops the others so a map click never lands in two places.
+  function anyOtherDrawingActive(exceptFence, exceptTree, exceptDrive){
+    return (!exceptFence && fenceDrawing) ||
+           (!exceptTree && typeof treeDrawing !== 'undefined' && treeDrawing) ||
+           (!exceptDrive && typeof driveDrawing !== 'undefined' && driveDrawing);
+  }
+  function setFenceDrawing(on){
+    fenceDrawing = on;
+    if (on){
+      if (typeof treeDrawing !== 'undefined' && treeDrawing){ treeDrawing = false; refreshTreeDrawUI(); }
+      if (typeof driveDrawing !== 'undefined' && driveDrawing){ driveDrawing = false; refreshDriveDrawUI(); }
+    }
+    refreshFenceDrawUI();
+  }
+  function refreshFenceDrawUI(){
+    var btn = document.getElementById('fenceDrawBtn');
+    btn.classList.toggle('primary', fenceDrawing);
+    btn.textContent = fenceDrawing ? '✅ Click the map · click here to stop' : '✏️ Start marking';
+    map.getContainer().style.cursor = anyOtherDrawingActive(false,false,false) ? 'crosshair' : '';
+  }
+
+  map.on('click', function(e){
+    if (!fenceDrawing) return;
+    fencePoints.push(e.latlng);
+    redrawFence();
+    updateFenceReadout();
+    saveFenceToStorage();
+  });
+
+  document.getElementById('fenceDrawBtn').addEventListener('click', function(){
+    setFenceDrawing(!fenceDrawing);
+  });
+  document.getElementById('fenceUndoBtn').addEventListener('click', function(){
+    fencePoints.pop();
+    redrawFence();
+    updateFenceReadout();
+    saveFenceToStorage();
+  });
+  document.getElementById('fenceClearBtn').addEventListener('click', function(){
+    fencePoints = [];
+    redrawFence();
+    updateFenceReadout();
+    saveFenceToStorage();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){
+      if (fenceDrawing) setFenceDrawing(false);
+      if (typeof treeDrawing !== 'undefined' && treeDrawing) setTreeDrawing(false);
+      if (typeof driveDrawing !== 'undefined' && driveDrawing) setDriveDrawing(false);
+    }
+  });
+
+  document.getElementById('fenceSaveBtn').addEventListener('click', function(){
+    var data = {
+      type: 'eagle-mill-fence-line',
+      savedAt: new Date().toISOString(),
+      points: fencePoints.map(function(p){ return [p.lat, p.lng]; }),
+      totalLengthFt: Number(fenceLengthFt().toFixed(2))
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'eagle-mill-fence-line.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  });
+
+  document.getElementById('fenceLoadBtn').addEventListener('click', function(){
+    document.getElementById('fenceLoadInput').click();
+  });
+  document.getElementById('fenceLoadInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var data = JSON.parse(reader.result);
+        var pts = data && data.points ? data.points : data;
+        if (!Array.isArray(pts) || !pts.length) throw new Error('no points');
+        fencePoints = pts.map(function(p){ return L.latLng(p[0], p[1]); });
+        redrawFence();
+        updateFenceReadout();
+        saveFenceToStorage();
+      } catch(err){
+        alert('Could not read that file — make sure it\'s a fence-line file saved from this tool\'s "Save to file" button.');
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  // Restore a previously-saved fence line from this browser, if any.
+  loadFenceFromStorage();
+  redrawFence();
+  updateFenceReadout();
+
+  // ---------- Tree line: Green Giant privacy screen ----------
+  // Trace a path with the same click-to-place interaction as the fence line;
+  // trees are then auto-spaced along it based on the adjustable canopy
+  // diameter, so mature canopies just touch with no gaps.
+  var treePath = [];
+  var treeVertexMarkers = [];
+  var treeCanopies = [];
+  var treeDrawing = false;
+  var treePathLine = L.polyline([], { color:'#2d6a4f', weight:2, opacity:0.6, dashArray:'2 6' }).addTo(map);
+  var treeVertexIcon = L.divIcon({ className:'', html:'<div class="tree-vertex-icon"></div>', iconSize:[10,10], iconAnchor:[5,5] });
+  var TREE_STORAGE_KEY = 'eagleMillSitePlanner_treeLine_v1';
+
+  function treeDiameterFt(){
+    var v = parseFloat(document.getElementById('treeDiaInput').value);
+    return (isFinite(v) && v > 0) ? v : 10;
+  }
+
+  function treePathLengthFt(){
+    var total = 0;
+    for (var i=1;i<treePath.length;i++){ total += treePath[i-1].distanceTo(treePath[i]); }
+    return total / FT;
+  }
+
+  function pointAtDistanceAlong(path, distM){
+    if (path.length === 1) return path[0];
+    var remaining = distM;
+    for (var i=1;i<path.length;i++){
+      var segLen = path[i-1].distanceTo(path[i]);
+      if (remaining <= segLen || i === path.length-1){
+        var t = segLen > 0 ? Math.max(0, Math.min(1, remaining/segLen)) : 0;
+        return L.latLng(
+          path[i-1].lat + (path[i].lat-path[i-1].lat)*t,
+          path[i-1].lng + (path[i].lng-path[i-1].lng)*t
+        );
+      }
+      remaining -= segLen;
+    }
+    return path[path.length-1];
+  }
+
+  function updateTreeReadout(n){
+    document.getElementById('treeCount').textContent =
+      '🌲 ' + n + ' Green Giant' + (n===1 ? '' : 's') + ' needed';
+    var lengthFt = treePathLengthFt();
+    var actualSpacing = (n >= 2) ? (lengthFt/(n-1)) : 0;
+    document.getElementById('treeLen').textContent =
+      lengthFt.toFixed(1) + ' ft of tree line · ' + (n>=2 ? actualSpacing.toFixed(1) + ' ft spacing on-center' : 'add points to trace the line');
+  }
+
+  function recomputeTreeCanopies(){
+    treePathLine.setLatLngs(treePath);
+    treeCanopies.forEach(function(c){ map.removeLayer(c); });
+    treeCanopies = [];
+
+    var diaM = treeDiameterFt() * FT;
+    var totalM = 0;
+    for (var i=1;i<treePath.length;i++){ totalM += treePath[i-1].distanceTo(treePath[i]); }
+
+    var n = 0;
+    if (treePath.length >= 2 && totalM > 0){
+      n = Math.max(2, Math.ceil(totalM/diaM) + 1);
+      n = Math.min(n, 2000); // safety cap against a mistyped near-zero diameter
+      for (var k=0;k<n;k++){
+        var d = totalM * k/(n-1);
+        var pt = pointAtDistanceAlong(treePath, d);
+        var c = L.circle(pt, {
+          radius: diaM/2, color:'#1b4332', weight:1.5, fillColor:'#40916c', fillOpacity:0.55
+        }).addTo(map);
+        treeCanopies.push(c);
+      }
+    }
+    updateTreeReadout(n);
+    saveTreeToStorage();
+  }
+
+  function redrawTreeLine(){
+    treePathLine.setLatLngs(treePath);
+    treeVertexMarkers.forEach(function(m){ map.removeLayer(m); });
+    treeVertexMarkers = treePath.map(function(pt, idx){
+      var mk = L.marker(pt, { icon: treeVertexIcon, draggable:true, title:'Drag to adjust · double-click to delete' }).addTo(map);
+      mk.on('drag', function(e){
+        treePath[idx] = e.target.getLatLng();
+        recomputeTreeCanopies();
+      });
+      mk.on('dragend', saveTreeToStorage);
+      mk.on('dblclick', function(e){
+        L.DomEvent.stop(e);
+        treePath.splice(idx, 1);
+        redrawTreeLine();
+        saveTreeToStorage();
+      });
+      return mk;
+    });
+    recomputeTreeCanopies();
+  }
+
+  function saveTreeToStorage(){
+    try{
+      localStorage.setItem(TREE_STORAGE_KEY, JSON.stringify({
+        path: treePath.map(function(p){ return [p.lat, p.lng]; }),
+        diameterFt: treeDiameterFt()
+      }));
+    } catch(e){ /* storage unavailable — Save-to-file still works */ }
+  }
+  function loadTreeFromStorage(){
+    try{
+      var raw = localStorage.getItem(TREE_STORAGE_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (data && Array.isArray(data.path) && data.path.length){
+        treePath = data.path.map(function(p){ return L.latLng(p[0], p[1]); });
+        if (isFinite(data.diameterFt) && data.diameterFt > 0){
+          document.getElementById('treeDiaInput').value = data.diameterFt;
+        }
+        return true;
+      }
+    } catch(e){ /* ignore missing/corrupt data */ }
+    return false;
+  }
+
+  function setTreeDrawing(on){
+    treeDrawing = on;
+    if (on){
+      if (fenceDrawing){ fenceDrawing = false; refreshFenceDrawUI(); }
+      if (typeof driveDrawing !== 'undefined' && driveDrawing){ driveDrawing = false; refreshDriveDrawUI(); }
+    }
+    refreshTreeDrawUI();
+  }
+  function refreshTreeDrawUI(){
+    var btn = document.getElementById('treeDrawBtn');
+    btn.classList.toggle('primary', treeDrawing);
+    btn.textContent = treeDrawing ? '✅ Click the map · click here to stop' : '🌲 Start marking';
+    map.getContainer().style.cursor = anyOtherDrawingActive(false,false,false) ? 'crosshair' : '';
+  }
+
+  map.on('click', function(e){
+    if (!treeDrawing) return;
+    treePath.push(e.latlng);
+    redrawTreeLine();
+  });
+
+  document.getElementById('treeDrawBtn').addEventListener('click', function(){ setTreeDrawing(!treeDrawing); });
+  document.getElementById('treeUndoBtn').addEventListener('click', function(){
+    treePath.pop();
+    redrawTreeLine();
+  });
+  document.getElementById('treeClearBtn').addEventListener('click', function(){
+    treePath = [];
+    redrawTreeLine();
+  });
+  document.getElementById('treeDiaInput').addEventListener('input', function(){ recomputeTreeCanopies(); });
+
+  document.getElementById('treeSaveBtn').addEventListener('click', function(){
+    var data = {
+      type: 'eagle-mill-tree-line',
+      savedAt: new Date().toISOString(),
+      diameterFt: treeDiameterFt(),
+      path: treePath.map(function(p){ return [p.lat, p.lng]; }),
+      treeCount: treeCanopies.length,
+      pathLengthFt: Number(treePathLengthFt().toFixed(2))
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'eagle-mill-tree-line.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  });
+  document.getElementById('treeLoadBtn').addEventListener('click', function(){
+    document.getElementById('treeLoadInput').click();
+  });
+  document.getElementById('treeLoadInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var data = JSON.parse(reader.result);
+        var pts = data && data.path;
+        if (!Array.isArray(pts) || !pts.length) throw new Error('no points');
+        treePath = pts.map(function(p){ return L.latLng(p[0], p[1]); });
+        if (data && isFinite(data.diameterFt) && data.diameterFt > 0){
+          document.getElementById('treeDiaInput').value = data.diameterFt;
+        }
+        redrawTreeLine();
+      } catch(err){
+        alert('Could not read that file — make sure it\'s a tree-line file saved from this tool\'s "Save to file" button.');
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  // Restore a previously-saved tree line from this browser, if any.
+  loadTreeFromStorage();
+  redrawTreeLine();
+
+  // ---------- Driveway ----------
+  // Trace a centerline (same click-to-place interaction as the fence/tree
+  // tools); it's rendered as a solid ribbon at the adjustable width — each
+  // segment is an offset rectangle, with a round "cap" circle at every vertex
+  // to fill the joints, so bends don't leave gaps or slivers.
+  var drivePath = [];
+  var driveVertexMarkers = [];
+  var driveSegmentShapes = []; // rectangles + joint circles, rebuilt each recompute
+  var driveDrawing = false;
+  var drivePathLine = L.polyline([], { color:'#3a3d42', weight:2, opacity:0.5, dashArray:'2 6' }).addTo(map);
+  var driveVertexIcon = L.divIcon({ className:'', html:'<div class="drive-vertex-icon"></div>', iconSize:[10,10], iconAnchor:[5,5] });
+  var DRIVE_STORAGE_KEY = 'eagleMillSitePlanner_driveway_v1';
+  var DRIVE_STYLE = { color:'#3a3d42', weight:1, fillColor:'#6b6f76', fillOpacity:0.8 };
+
+  function driveWidthFt(){
+    var v = parseFloat(document.getElementById('driveWidthInput').value);
+    return (isFinite(v) && v > 0) ? v : 12;
+  }
+
+  function drivePathLengthFt(){
+    var total = 0;
+    for (var i=1;i<drivePath.length;i++){ total += drivePath[i-1].distanceTo(drivePath[i]); }
+    return total / FT;
+  }
+
+  function updateDriveReadout(){
+    document.getElementById('driveLen').textContent =
+      drivePathLengthFt().toFixed(1) + ' ft driveway · ' + driveWidthFt() + ' ft wide';
+  }
+
+  // Small flat-plane projection (same approximation used throughout this file)
+  // anchored at the path's first point, just to offset the centerline into a
+  // ribbon — accurate at driveway scale.
+  function driveLocalXY(latlng, originLat, originLng){
+    return [
+      (latlng.lng - originLng) * metersPerDegLng(originLat),
+      (latlng.lat - originLat) * metersPerDegLat()
+    ];
+  }
+  function driveXYToLatLng(xy, originLat, originLng){
+    return L.latLng(originLat + xy[1]/metersPerDegLat(), originLng + xy[0]/metersPerDegLng(originLat));
+  }
+
+  function recomputeDrivewayShape(){
+    drivePathLine.setLatLngs(drivePath);
+    driveSegmentShapes.forEach(function(s){ map.removeLayer(s); });
+    driveSegmentShapes = [];
+
+    if (drivePath.length >= 1){
+      var originLat = drivePath[0].lat, originLng = drivePath[0].lng;
+      var halfWM = (driveWidthFt() * FT) / 2;
+      var xy = drivePath.map(function(p){ return driveLocalXY(p, originLat, originLng); });
+
+      for (var i=1;i<xy.length;i++){
+        var ax=xy[i-1][0], ay=xy[i-1][1], bx=xy[i][0], by=xy[i][1];
+        var dx=bx-ax, dy=by-ay, len=Math.sqrt(dx*dx+dy*dy);
+        if (len < 1e-6) continue;
+        var ux=dx/len, uy=dy/len, nx=-uy, ny=ux;
+        var corners = [
+          [ax+nx*halfWM, ay+ny*halfWM], [bx+nx*halfWM, by+ny*halfWM],
+          [bx-nx*halfWM, by-ny*halfWM], [ax-nx*halfWM, ay-ny*halfWM]
+        ].map(function(p){ return driveXYToLatLng(p, originLat, originLng); });
+        driveSegmentShapes.push(L.polygon(corners, DRIVE_STYLE).addTo(map));
+      }
+      // Round joints/caps at every vertex so bends and endpoints stay solid.
+      drivePath.forEach(function(pt){
+        driveSegmentShapes.push(L.circle(pt, Object.assign({radius: halfWM}, DRIVE_STYLE)).addTo(map));
+      });
+    }
+    updateDriveReadout();
+    saveDriveToStorage();
+  }
+
+  function redrawDriveway(){
+    drivePathLine.setLatLngs(drivePath);
+    driveVertexMarkers.forEach(function(m){ map.removeLayer(m); });
+    driveVertexMarkers = drivePath.map(function(pt, idx){
+      var mk = L.marker(pt, { icon: driveVertexIcon, draggable:true, title:'Drag to adjust · double-click to delete' }).addTo(map);
+      mk.on('drag', function(e){
+        drivePath[idx] = e.target.getLatLng();
+        recomputeDrivewayShape();
+      });
+      mk.on('dragend', saveDriveToStorage);
+      mk.on('dblclick', function(e){
+        L.DomEvent.stop(e);
+        drivePath.splice(idx, 1);
+        redrawDriveway();
+        saveDriveToStorage();
+      });
+      return mk;
+    });
+    recomputeDrivewayShape();
+  }
+
+  function saveDriveToStorage(){
+    try{
+      localStorage.setItem(DRIVE_STORAGE_KEY, JSON.stringify({
+        path: drivePath.map(function(p){ return [p.lat, p.lng]; }),
+        widthFt: driveWidthFt()
+      }));
+    } catch(e){ /* storage unavailable — Save-to-file still works */ }
+  }
+  function loadDriveFromStorage(){
+    try{
+      var raw = localStorage.getItem(DRIVE_STORAGE_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (data && Array.isArray(data.path) && data.path.length){
+        drivePath = data.path.map(function(p){ return L.latLng(p[0], p[1]); });
+        if (isFinite(data.widthFt) && data.widthFt > 0){
+          document.getElementById('driveWidthInput').value = data.widthFt;
+        }
+        return true;
+      }
+    } catch(e){ /* ignore missing/corrupt data */ }
+    return false;
+  }
+
+  function setDriveDrawing(on){
+    driveDrawing = on;
+    if (on){
+      if (fenceDrawing){ fenceDrawing = false; refreshFenceDrawUI(); }
+      if (treeDrawing){ treeDrawing = false; refreshTreeDrawUI(); }
+    }
+    refreshDriveDrawUI();
+  }
+  function refreshDriveDrawUI(){
+    var btn = document.getElementById('driveDrawBtn');
+    btn.classList.toggle('primary', driveDrawing);
+    btn.textContent = driveDrawing ? '✅ Click the map · click here to stop' : '🛣️ Start marking';
+    map.getContainer().style.cursor = anyOtherDrawingActive(false,false,false) ? 'crosshair' : '';
+  }
+
+  map.on('click', function(e){
+    if (!driveDrawing) return;
+    drivePath.push(e.latlng);
+    redrawDriveway();
+  });
+
+  document.getElementById('driveDrawBtn').addEventListener('click', function(){ setDriveDrawing(!driveDrawing); });
+  document.getElementById('driveUndoBtn').addEventListener('click', function(){
+    drivePath.pop();
+    redrawDriveway();
+  });
+  document.getElementById('driveClearBtn').addEventListener('click', function(){
+    drivePath = [];
+    redrawDriveway();
+  });
+  document.getElementById('driveWidthInput').addEventListener('input', function(){ recomputeDrivewayShape(); });
+
+  document.getElementById('driveSaveBtn').addEventListener('click', function(){
+    var data = {
+      type: 'eagle-mill-driveway',
+      savedAt: new Date().toISOString(),
+      widthFt: driveWidthFt(),
+      path: drivePath.map(function(p){ return [p.lat, p.lng]; }),
+      pathLengthFt: Number(drivePathLengthFt().toFixed(2))
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'eagle-mill-driveway.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  });
+  document.getElementById('driveLoadBtn').addEventListener('click', function(){
+    document.getElementById('driveLoadInput').click();
+  });
+  document.getElementById('driveLoadInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var data = JSON.parse(reader.result);
+        var pts = data && data.path;
+        if (!Array.isArray(pts) || !pts.length) throw new Error('no points');
+        drivePath = pts.map(function(p){ return L.latLng(p[0], p[1]); });
+        if (data && isFinite(data.widthFt) && data.widthFt > 0){
+          document.getElementById('driveWidthInput').value = data.widthFt;
+        }
+        redrawDriveway();
+      } catch(err){
+        alert('Could not read that file — make sure it\'s a driveway file saved from this tool\'s "Save to file" button.');
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  // Restore a previously-saved driveway from this browser, if any.
+  loadDriveFromStorage();
+  redrawDriveway();
+
+})();
+</script>
+</body>
+</html>
